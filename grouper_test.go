@@ -48,9 +48,9 @@ func ExampleGroup_justErrors() {
 			return resp, err
 		}
 	}
-	g, _ := grouper.New(context.Background(), funcs...)
+	g := grouper.New(funcs...)
 	// Wait for all HTTP fetches to complete.
-	if _, err := g.Wait(); err == nil {
+	if _, err := g.Wait(context.Background()); err == nil {
 		fmt.Println("Successfully fetched all URLs.")
 	}
 }
@@ -69,8 +69,8 @@ func ExampleGroup_parallel() {
 				return search(ctx, query)
 			}
 		}
-		g, ctx := grouper.New(ctx, funcs...)
-		if results, err := g.Wait(); err != nil {
+		g := grouper.New(funcs...)
+		if results, err := g.Wait(ctx); err != nil {
 			return nil, err
 		} else {
 			return results, nil
@@ -116,8 +116,8 @@ func TestZeroGroup(t *testing.T) {
 				firstErr = err
 			}
 		}
-		g, _ := grouper.New(context.Background(), funcs...)
-		if _, gErr := g.Wait(); gErr != firstErr {
+		g := grouper.New(funcs...)
+		if _, gErr := g.Wait(context.Background()); gErr != firstErr {
 			t.Errorf("after %T.Go(func() error { return err }) for err in %v\n"+
 				"g.Wait() = %v; want %v",
 				g, tc.errs, gErr, firstErr)
@@ -139,14 +139,14 @@ func TestWithContext(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		funcs := make([]func(context.Context) (error, error), len(tc.errs))
+		funcs := make([]func(context.Context) (context.Context, error), len(tc.errs))
 		for i, err := range tc.errs {
 			err := err
-			funcs[i] = func(context.Context) (error, error) { return err, err }
+			funcs[i] = func(ctx context.Context) (context.Context, error) { return ctx, err }
 		}
-		g, ctx := grouper.New(context.Background(), funcs...)
-
-		if _, err := g.Wait(); err != tc.want {
+		g := grouper.New(funcs...)
+		ctxs, err := g.Wait(context.Background())
+		if err != tc.want {
 			t.Errorf("after %T.Go(func() error { return err }) for err in %v\n"+
 				"g.Wait() = %v; want %v",
 				g, tc.errs, err, tc.want)
@@ -154,7 +154,7 @@ func TestWithContext(t *testing.T) {
 
 		canceled := false
 		select {
-		case <-ctx.Done():
+		case <-ctxs[0].Done():
 			canceled = true
 		default:
 		}
@@ -184,8 +184,8 @@ func TestValueGroup(t *testing.T) {
 			res := res
 			funcs[i] = func(context.Context) (uint, error) { return res, tc.err }
 		}
-		g, _ := grouper.New(context.Background(), funcs...)
-		if _, gErr := g.Wait(); gErr != tc.err {
+		g := grouper.New(funcs...)
+		if _, gErr := g.Wait(context.Background()); gErr != tc.err {
 			t.Errorf("after %T.Go(func() error { return err }) for err in %v\n"+
 				"g.Wait() = %v; want %v",
 				g, tc.err, gErr, tc.err)
