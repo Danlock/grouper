@@ -39,7 +39,12 @@ func New[V any](ctx context.Context, funcs ...func(context.Context) (V, error)) 
 // Wait blocks until all function calls passed into New have returned, then
 // returns the successfully returned values and the first non-nil error (if any).
 // Note that the values slice could be sparse in the case of multiple errors.
+// Finally a Group is only meant to be waited on once, further calls will fail.
 func (g *Group[V]) Wait() ([]V, error) {
+	if g.ctx.Err() != nil {
+		return nil, g.ctx.Err()
+	}
+
 	values := make([]V, len(g.funcs))
 	for i, f := range g.funcs {
 		i, f := i, f
